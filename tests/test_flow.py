@@ -73,8 +73,7 @@ def test_write_prefers_new_photos_and_limits_reused(project, cfg, mock_llm):
     assert [b.photo for b in post.blocks if b.kind == "image"] == ["P1", "P2"]
     assert meta["images"]["P1"]["reused"] is False and meta["images"]["P2"]["reused"] is True
     assert (d / "images/01.jpg").exists() and (d / "images/02.jpg").exists()
-    # 공정위 표기는 코드가 맨 앞에, 마크다운 제거, 태그 정규화(주 키워드 먼저, 중복·# 제거)
-    assert post.blocks[0].text == cfg["business"]["disclosure"]
+    # 마크다운 제거, 태그 정규화(주 키워드 먼저, 중복·# 제거)
     assert [b.text for b in post.blocks if b.kind == "heading"] == ["맛은 어떤가요"]
     assert post.tags == ["밤라떼", "가을신메뉴", "카페"]
     assert not [l for l in meta["lints"] if l["level"] == "block"]

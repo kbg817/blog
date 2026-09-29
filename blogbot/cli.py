@@ -56,7 +56,7 @@ def _lint_ctx(cfg: dict, keyword: str, notes: str, post, exclude: Path | None = 
         signatures = list(profile.signature_phrases)
     except SystemExit:
         signatures = []
-    whitelist = [biz.get("call_to_action") or "", biz.get("disclosure") or ""] + [f for f in (biz.get("facts") or []) if f] + signatures
+    whitelist = [biz.get("call_to_action") or ""] + [f for f in (biz.get("facts") or []) if f] + signatures
     ctx = {
         "cfg": cfg,
         "keyword": keyword,
@@ -128,7 +128,7 @@ def cmd_write(args, cfg) -> Path:
     from blogbot.photos import Ledger, existing_path, index_photos, load_json
     from blogbot.style import load_profile
     from blogbot.writer import (
-        add_disclosure, body_text, chars_no_space, lint_post, new_draft_dir, revise_post, save_draft, write_post,
+        body_text, chars_no_space, lint_post, new_draft_dir, revise_post, save_draft, write_post,
     )
 
     P = paths()
@@ -187,7 +187,6 @@ def cmd_write(args, cfg) -> Path:
         topic=args.topic, keyword=args.keyword, sub_keywords=_split(args.sub_keywords), notes=notes, kind=args.kind,
         profile=profile, stats=stats, docs=docs, photo_ids=photo_ids, reused_ids=reused_ids, recent_posts=own, cfg=cfg,
     )
-    post = add_disclosure(post, cfg.get("business", {}))
 
     def lint_extra():
         used = [b.photo for b in post.blocks if b.kind == "image"]

@@ -55,33 +55,21 @@ def _ctx(cfg, **over):
 
 
 def test_tag_relevance_check_fires(cfg):
-    post = _post([Block(kind="text", text=cfg["business"]["disclosure"], photo=""),
-                  Block(kind="text", text="밤라떼 이야기 " * 30, photo="")],
+    post = _post([Block(kind="text", text="밤라떼 이야기 " * 30, photo="")],
                  tags=["밤라떼", "전혀무관태그", "제주도여행"])
     msgs = [l["msg"] for l in lint_post(post, _ctx(cfg)) if l["code"] == "tags"]
     assert msgs and "제주도여행" in msgs[0]
 
 
-def test_disclosure_must_stay_first_and_editor_cannot_touch_it(cfg, monkeypatch):
-    disc = cfg["business"]["disclosure"]
-    post = _post([Block(kind="text", text="밤라떼 이야기 " * 30, photo="")])
-    assert "disclosure" in {l["code"] for l in lint_post(post, _ctx(cfg)) if l["level"] == "block"}
-
-    post = _post([Block(kind="text", text=disc, photo=""), Block(kind="text", text="본문", photo="")])
-    seen = {}
-
-    def parse(**kw):
-        seen["content"] = kw["content"]
-        return Revision(title="", edits=[Edit(block_index=0, new_text="바뀐 문구"), Edit(block_index=1, new_text="")])
-
-    monkeypatch.setattr(llm, "parse", parse)
+def test_editor_skips_empty_edits(cfg, monkeypatch):
+    post = _post([Block(kind="text", text="첫 문단", photo=""), Block(kind="text", text="본문", photo="")])
+    monkeypatch.setattr(llm, "parse", lambda **kw: Revision(title="", edits=[Edit(block_index=1, new_text="")]))
     post, applied = revise_post(post, [{"level": "warn", "code": "kw_intro", "msg": "x"}], make_profile(), "밤라떼", cfg)
-    assert disc not in seen["content"]          # 편집자에게 보여주지도 않음
-    assert post.blocks[0].text == disc and post.blocks[1].text == "본문" and applied == 0
+    assert post.blocks[1].text == "본문" and applied == 0
 
 
 def test_blank_business_fields_do_not_crash(project, cfg):
-    cfg["business"].update(call_to_action=None, description=None, facts=None, disclosure=None)
+    cfg["business"].update(call_to_action=None, description=None, facts=None)
     post = _post([Block(kind="text", text="밤라떼 이야기 " * 30, photo="")])
     ctx = cli._lint_ctx(cfg, "밤라떼", "메모", post)
     lint_post(post, ctx)

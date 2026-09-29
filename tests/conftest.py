@@ -43,7 +43,7 @@ def project(tmp_path, monkeypatch):
 def cfg():
     return {
         "naver": {"blog_id": "tester", "mode": "review"},
-        "business": {"name": "테스트카페", "relationship": "owner", "disclosure": "제가 운영하는 카페 이야기예요.",
+        "business": {"name": "테스트카페", "relationship": "owner",
                      "facts": ["영업시간: 10:00~19:00"], "call_to_action": "궁금한 점은 톡톡으로 물어봐 주세요."},
         "writing": {"review_passes": 0, "length_no_space": {"min": 10}},
         "images": {},

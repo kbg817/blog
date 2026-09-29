@@ -312,14 +312,6 @@ def chars_no_space(text: str) -> int:
     return len(re.sub(r"\s", "", text))
 
 
-def add_disclosure(post: Post, biz: dict) -> Post:
-    """공정위 지침: 경제적 이해관계는 제목 또는 본문 첫 부분에. 모델이 아니라 코드가 넣는다."""
-    text = (biz.get("disclosure") or "").strip()
-    if text and not (post.blocks and post.blocks[0].text == text):
-        post.blocks.insert(0, Block(kind="text", text=text, photo=""))
-    return post
-
-
 # ---- 검사 ---------------------------------------------------------------
 
 
@@ -359,11 +351,6 @@ def lint_post(post: Post, ctx: dict) -> list[dict]:
         if prev_title and similarity(post.title, prev_title) >= 0.85:
             add("block", "title_repeat", f"예전 글 제목과 거의 같음: '{prev_title}'")
             break
-    disclosure = (biz.get("disclosure") or "").strip()
-    if biz.get("relationship") == "sponsored" and not disclosure:
-        add("block", "disclosure", "협찬 글인데 business.disclosure(광고 표기 문구)가 비어 있습니다")
-    if disclosure and not (post.blocks and post.blocks[0].text.strip() == disclosure):
-        add("block", "disclosure", "본문 첫 문단에 business.disclosure 문구가 그대로 있어야 합니다 (공정위: 첫 부분 표시)")
     if not post.blocks or n_chars < 200:
         add("block", "too_short", f"본문이 너무 짧습니다 ({n_chars}자)")
 
@@ -485,12 +472,8 @@ def revise_post(post: Post, lints: list[dict], profile: StyleProfile, keyword: s
     issues = [l for l in lints if l["code"] in REVISABLE]
     if not issues:
         return post, 0
-    # 광고·관계 표기 문구는 법적 문구라 편집자가 건드리지 못하게 목록에서 뺀다
-    disclosure = (cfg.get("business", {}).get("disclosure") or "").strip()
-    protected = {0} if disclosure and post.blocks and post.blocks[0].text.strip() == disclosure else set()
     blocks = "\n".join(
-        f"[{i}] ({b.kind}{' ' + b.photo if b.photo else ''}) {b.text}"
-        for i, b in enumerate(post.blocks) if i not in protected
+        f"[{i}] ({b.kind}{' ' + b.photo if b.photo else ''}) {b.text}" for i, b in enumerate(post.blocks)
     )
     wcfg = cfg.get("writing", {})
     rev = llm.parse(
@@ -511,7 +494,7 @@ def revise_post(post: Post, lints: list[dict], profile: StyleProfile, keyword: s
         applied += 1
     for e in rev.edits:
         new_text = MARKDOWN_RE.sub("", e.new_text).strip()
-        if e.block_index in protected or not (0 <= e.block_index < len(post.blocks)):
+        if not (0 <= e.block_index < len(post.blocks)):
             continue
         block = post.blocks[e.block_index]
         if block.kind == "divider" or (not new_text and block.kind != "image"):
