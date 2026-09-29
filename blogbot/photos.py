@@ -130,8 +130,10 @@ class Ledger:
     # -- 사진 ----------------------------------------------------------------
     def use_count(self, photo_id: str, entry: dict | None = None, archive_counts_as_used: bool = True) -> int:
         n = len(self.data["photo_uses"].get(photo_id, []))
-        if archive_counts_as_used and entry and entry.get("source") == "archive":
-            n += 1
+        # 예전 사진은 블로그에 이미 한 번 올라간 것으로 계산. 단, 이 프로그램으로 쓴 기록이 있으면
+        # 그 기록이 곧 그 사용이므로 두 번 세지 않는다 (올린 뒤 data/photos 로 옮긴 경우).
+        if n == 0 and archive_counts_as_used and entry and entry.get("source") == "archive":
+            n = 1
         return n
 
     def photo_available(
@@ -156,7 +158,7 @@ class Ledger:
         return [
             datetime.fromisoformat(p["at"])
             for p in self.data["posts"]
-            if p.get("status") in ("published", "unknown", "saved_to_naver_draft")
+            if p.get("status") in ("published", "scheduled", "unknown", "saved_to_naver_draft")
         ]
 
     def schedule_block_reason(self, sched: dict, now: datetime | None = None) -> str:
@@ -169,8 +171,8 @@ class Ledger:
         per_week = int(sched.get("max_posts_per_week", 4))
         gap = float(sched.get("min_interval_hours", 20))
         if times and now - max(times) < timedelta(hours=gap):
-            wait = max(times) + timedelta(hours=gap) - now
-            return f"직전 발행 후 {gap:g}시간이 지나지 않았습니다 (약 {wait.seconds // 3600}시간 {wait.seconds % 3600 // 60}분 남음)."
+            wait = int((max(times) + timedelta(hours=gap) - now).total_seconds())
+            return f"직전 발행 후 {gap:g}시간이 지나지 않았습니다 (약 {wait // 3600}시간 {wait % 3600 // 60}분 남음)."
         if sum(now - t < timedelta(hours=24) for t in times) >= per_day:
             return f"최근 24시간 발행 한도({per_day}건)에 도달했습니다."
         if sum(now - t < timedelta(days=7) for t in times) >= per_week:

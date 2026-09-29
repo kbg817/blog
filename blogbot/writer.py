@@ -78,9 +78,11 @@ DEFAULT_LEGAL_WATCH = [
     "치료", "완치", "효능", "효과 보장", "부작용 없", "100%", "최초", "1위", "유일", "최저가", "무조건", "보장합니다",
 ]
 CLICKBAIT = ["완벽", "총정리", "충격", "역대급", "꼭 보세요", "무조건", "대박", "필독", "모르면 손해"]
+# 공감·댓글이라는 단어 자체가 아니라 '요청'과 '대가 약속'만 잡는다
+# ("많은 분들이 공감해 주셨어요", "댓글 주시면 답변 드려요" 는 괜찮음)
 ENGAGEMENT_BAIT = re.compile(
-    r"이웃\s*추가|서로\s*이웃|서이추|공감.{0,8}(부탁|눌러|꾹|해\s*주)|스크랩.{0,6}부탁|"
-    r"댓글.{0,15}(드려요|드립니다|증정|추첨)"
+    r"이웃\s*추가|서로\s*이웃|서이추|공감\s*(버튼|꾹)|공감.{0,4}(눌러|부탁)|스크랩.{0,6}부탁|"
+    r"댓글.{0,15}(증정|추첨|이벤트|선물)"
 )
 NEEDS_CHECK = re.compile(r"[\[\(【]\s*확인\s*필요[^\]\)】]*[\]\)】]")
 URL_RE = re.compile(r"https?://\S+|www\.\S+")
@@ -150,12 +152,12 @@ RULES = """목표: 이 사람이 오늘 새로 겪은 일을 직접 쓴 것처�
 def _business_text(biz: dict) -> str:
     facts = "\n".join(f"- {f}" for f in biz.get("facts", []) or []) or "(없음)"
     return (
-        f"이름: {biz.get('name', '')}\n"
+        f"이름: {biz.get('name') or ''}\n"
         f"글쓴이와의 관계: {biz.get('relationship', 'owner')}\n"
         f"소개: {(biz.get('description') or '').strip()}\n"
         f"블로그 주제: {', '.join(biz.get('topics', []) or [])}\n"
         f"확정 정보 (글에 써도 되는 사실은 이것뿐):\n{facts}\n"
-        f"마무리 안내 (뜻은 유지하되 매번 다른 말로): {biz.get('call_to_action', '')}"
+        f"마무리 안내 (뜻은 유지하되 매번 다른 말로): {biz.get('call_to_action') or ''}"
     )
 
 
@@ -356,15 +358,18 @@ def lint_post(post: Post, ctx: dict) -> list[dict]:
         if prev_title and similarity(post.title, prev_title) >= 0.85:
             add("block", "title_repeat", f"예전 글 제목과 거의 같음: '{prev_title}'")
             break
-    if biz.get("relationship") == "sponsored" and not (biz.get("disclosure") or "").strip():
+    disclosure = (biz.get("disclosure") or "").strip()
+    if biz.get("relationship") == "sponsored" and not disclosure:
         add("block", "disclosure", "협찬 글인데 business.disclosure(광고 표기 문구)가 비어 있습니다")
+    if disclosure and not (post.blocks and post.blocks[0].text.strip() == disclosure):
+        add("block", "disclosure", "본문 첫 문단에 business.disclosure 문구가 그대로 있어야 합니다 (공정위: 첫 부분 표시)")
     if not post.blocks or n_chars < 200:
         add("block", "too_short", f"본문이 너무 짧습니다 ({n_chars}자)")
 
     # --- 경고 ---
     t = post.title
     if not (10 <= len(t) <= 45):
-        add("warn", "title_length", f"제목 {len(t)}자 (상위 글 관측 범위는 대략 25~45자)")
+        add("warn", "title_length", f"제목 {len(t)}자 (10~45자 권장, 상위 글은 대략 25~45자)")
     if re.match(r"^[^\w가-힣]", t):
         add("warn", "title_symbol", "제목이 특수문자/이모지로 시작합니다")
     bait = [w for w in CLICKBAIT if w in t]
@@ -406,7 +411,8 @@ def lint_post(post: Post, ctx: dict) -> list[dict]:
     stale = ctx.get("stale_photos", 0)
     if stale:
         add("warn", "old_photos", f"1년 넘은 사진 {stale}장 — 최신 정보처럼 쓰였는지 확인")
-    unrelated = [x for x in post.tags[1:] if re.sub(r"\s", "", x) not in re.sub(r"\s", "", everything.replace(" ".join(post.tags), ""))]
+    content_ns = re.sub(r"\s", "", "\n".join([post.title] + [b.text for b in post.blocks]))
+    unrelated = [x for x in post.tags[1:] if re.sub(r"\s", "", x) not in content_ns]
     if unrelated:
         add("warn", "tags", f"본문에 안 나오는 태그: {', '.join(unrelated)}")
     if not re.search(r"20\d{2}\s*년|\d{1,2}\s*월", body):
@@ -478,8 +484,12 @@ def revise_post(post: Post, lints: list[dict], profile: StyleProfile, keyword: s
     issues = [l for l in lints if l["code"] in REVISABLE]
     if not issues:
         return post, 0
+    # 광고·관계 표기 문구는 법적 문구라 편집자가 건드리지 못하게 목록에서 뺀다
+    disclosure = (cfg.get("business", {}).get("disclosure") or "").strip()
+    protected = {0} if disclosure and post.blocks and post.blocks[0].text.strip() == disclosure else set()
     blocks = "\n".join(
-        f"[{i}] ({b.kind}{' ' + b.photo if b.photo else ''}) {b.text}" for i, b in enumerate(post.blocks)
+        f"[{i}] ({b.kind}{' ' + b.photo if b.photo else ''}) {b.text}"
+        for i, b in enumerate(post.blocks) if i not in protected
     )
     wcfg = cfg.get("writing", {})
     rev = llm.parse(
@@ -499,9 +509,14 @@ def revise_post(post: Post, lints: list[dict], profile: StyleProfile, keyword: s
         post.title = MARKDOWN_RE.sub("", rev.title).strip()
         applied += 1
     for e in rev.edits:
-        if 0 <= e.block_index < len(post.blocks) and post.blocks[e.block_index].kind != "divider":
-            post.blocks[e.block_index].text = MARKDOWN_RE.sub("", e.new_text).strip()
-            applied += 1
+        new_text = MARKDOWN_RE.sub("", e.new_text).strip()
+        if e.block_index in protected or not (0 <= e.block_index < len(post.blocks)):
+            continue
+        block = post.blocks[e.block_index]
+        if block.kind == "divider" or (not new_text and block.kind != "image"):
+            continue
+        block.text = new_text
+        applied += 1
     return post, applied
 
 

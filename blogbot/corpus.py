@@ -145,8 +145,11 @@ def pick_examples(query: str, docs: list[Manuscript], k: int) -> list[tuple[Manu
 
 def split_sentences(text: str, min_len: int = 10) -> list[str]:
     text = text.replace(PHOTO_MARK, "\n")
-    # 마침표·물음표·느낌표·물결 뒤, 또는 마침표 없이 끝나는 흔한 종결어미(요/다/죠…)·ㅎㅎ 뒤 공백에서 나눈다.
-    text = re.sub(r"([.!?。~…]|(?<=[가-힣])[요다죠네까음함]|[ㅎㅋ]{2,}|\^\^)[ \t]+", "\\1\n", text)
+    # 마침표·물음표·느낌표·물결 뒤, 또는 마침표 없이 끝나는 흔한 종결어미 뒤 공백에서 나눈다.
+    # (보다·바다·처음·마음처럼 문장 중간 단어 끝의 다/음 에서는 나누지 않는다)
+    text = re.sub(
+        r"([.!?。~…]|(?<![필중주])요|니다|[었았였했한된이는겠]다|죠|[ㅎㅋ]{2,}|\^\^)[ \t]+", "\\1\n", text
+    )
     return [p.strip() for p in text.split("\n") if len(_normalize(p)) >= min_len]
 
 

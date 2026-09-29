@@ -56,7 +56,7 @@ def _lint_ctx(cfg: dict, keyword: str, notes: str, post, exclude: Path | None = 
         signatures = list(profile.signature_phrases)
     except SystemExit:
         signatures = []
-    whitelist = [biz.get("call_to_action", ""), biz.get("disclosure", "")] + list(biz.get("facts", []) or []) + signatures
+    whitelist = [biz.get("call_to_action") or "", biz.get("disclosure") or ""] + [f for f in (biz.get("facts") or []) if f] + signatures
     ctx = {
         "cfg": cfg,
         "keyword": keyword,
@@ -68,7 +68,7 @@ def _lint_ctx(cfg: dict, keyword: str, notes: str, post, exclude: Path | None = 
         "signatures": signatures,
         "ai_tells": list(DEFAULT_AI_TELLS) + list(wcfg.get("banned_phrases", []) or []),
         "legal_watch": list(DEFAULT_LEGAL_WATCH) + list(wcfg.get("legal_watchlist", []) or []),
-        "known_facts": "\n".join([notes, keyword, *(biz.get("facts", []) or []), biz.get("description", "")]),
+        "known_facts": "\n".join([notes, keyword, *[f for f in (biz.get("facts") or []) if f], biz.get("description") or ""]),
     }
     ctx.update(extra or {})
     return ctx
@@ -244,7 +244,16 @@ def cmd_write(args, cfg) -> Path:
         images[b.photo] = {"file": name, "hash": h, "reused": b.photo in reused_ids}
         keep.append(b)
     post.blocks = keep
-    meta.update(images=images, lints=lints)
+    # 사진 처리에서 빠진 사진을 반영해 다시 검사
+    image_lints = [l for l in lints if l["code"] in ("image", "image_error")]
+    used = [b.photo for b in post.blocks if b.kind == "image"]
+    year_ago = (datetime.now() - timedelta(days=365)).isoformat()
+    ctx = _lint_ctx(cfg, args.keyword, notes, post, extra={
+        "reused_in_post": sum(p in reused_ids for p in used),
+        "stale_photos": sum(1 for p in used if (photo_ids[p].get("taken_at") or "9999") < year_ago),
+    })
+    lints = lint_post(post, ctx) + image_lints
+    meta.update(images=images, lints=lints, overlap=ctx["overlap"], chars_no_space=chars_no_space(body_text(post)))
     save_draft(d, post, meta)
     _print_lints(lints)
     print(f"\n초안 저장: {d}\n  미리보기: {d / 'preview.md'}")
@@ -358,19 +367,22 @@ def cmd_check(args, cfg) -> None:
     ledger = Ledger(paths().ledger)
     if args.resume:
         ledger.data["halted"] = ""
+        ledger.data["resumed_at"] = datetime.now().isoformat(timespec="seconds")
         ledger.save()
         print("발행 중단을 해제했습니다.")
         return
     now = datetime.now()
     pending = [
         p for p in ledger.data["posts"]
-        if p.get("status") in ("published", "scheduled", "unknown") and p.get("indexed") is None
+        if p.get("status") in PUBLISHED_STATES and p.get("indexed") is None
         and now - datetime.fromisoformat(p["at"]) >= timedelta(hours=24)
     ]
     if not pending:
         print("확인할 글이 없습니다 (발행 후 24시간이 지난 글만 확인합니다).")
         return
-    print("각 주소를 브라우저에서 열어 '블로그' 탭에 내 글이 보이는지 확인하세요.\n")
+    print("각 주소를 브라우저에서 열어 '블로그' 탭에 내 글이 보이는지 확인하세요.")
+    print("(임시저장·예약한 글은 실제로 발행된 뒤에 확인하고, 아직이면 Enter 로 건너뛰세요)\n")
+    answered = False
     for p in pending:
         url = "https://search.naver.com/search.naver?where=blog&query=" + quote(f'"{p["title"]}"')
         print(f"- {p['title']}\n  {url}")
@@ -378,7 +390,12 @@ def cmd_check(args, cfg) -> None:
         if ans in ("y", "n"):
             p["indexed"] = ans == "y"
             p["checked_at"] = now.isoformat(timespec="seconds")
-    checked = [p for p in ledger.data["posts"] if p.get("indexed") is not None]
+            answered = True
+    if not answered:
+        ledger.save()
+        return
+    since = ledger.data.get("resumed_at", "")
+    checked = [p for p in ledger.data["posts"] if p.get("indexed") is not None and p.get("checked_at", "") >= since]
     streak = int(cfg.get("schedule", {}).get("halt_after_missing", 2))
     if len(checked) >= streak and all(p["indexed"] is False for p in checked[-streak:]):
         ledger.data["halted"] = f"최근 {streak}개 글이 검색에 나오지 않음"
@@ -454,7 +471,8 @@ def main(argv: list[str] | None = None) -> None:
     def add_publish_args(s):
         s.add_argument("--mode", choices=["review", "draft", "publish"], help="config 의 naver.mode 대신 사용")
         s.add_argument("--ignore-overlap", action="store_true", help="유사도 경고를 확인했고 그대로 진행")
-        s.add_argument("--republish", action="store_true", help="이미 올린 것으로 기록된 초안을 다시 올림")
+        s.add_argument("--republish", action="store_true",
+                       help="이미 올린 것으로 기록된 초안을 다시 올림 (사진 사용·발행 횟수는 보수적으로 한 번 더 기록됨)")
         s.add_argument("--debug", action="store_true", help="단계별 스크린샷을 초안 폴더/debug 에 저장")
 
     s = sub.add_parser("write", help="새 글 초안 작성 + 검사 + 사진 가공")

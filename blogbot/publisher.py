@@ -21,6 +21,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlparse
 
 from blogbot.writer import Post
 
@@ -44,7 +45,7 @@ DEFAULT_SELECTORS = {
     "publish_button": ["button[data-click-area='tpb.publish']"],
     "publish_layer": ["div[class*='layer_publish']", "div[class*='publish_layer']"],
     "category_button": ["button[data-click-area='tpb*i.category']", "button[class*='selectbox_button']"],
-    "category_item": "label:has-text('{name}'), span:has-text('{name}')",
+    "category_item": ["label:text-is(\"{name}\")", "span:text-is(\"{name}\")", "label:has-text(\"{name}\")"],
     "open_public": ["#open_public", "input[value='0'][name*='open']"],
     "search_allow": ["#publish-option-search"],
     "tag_input": ["input#tag-input", "input[placeholder*='태그']"],
@@ -156,18 +157,21 @@ class Editor:
 
 def _check_account_state(page, ed: Editor) -> None:
     url = page.url
-    if "nid.naver.com" in url:
-        if "idSafety" in url or "help" in url:
+    parsed = urlparse(url)
+    if parsed.netloc.endswith("nid.naver.com"):
+        if "idSafety" in parsed.path or parsed.path.startswith("/user2/help"):
             raise Blocked(
                 "네이버 아이디 보호조치 화면입니다. 브라우저에서 직접 본인 확인으로 해제한 뒤, "
                 "하루 정도 지나서 다시 시도하세요. (자동 재시도하지 않습니다)"
             )
         raise Blocked("로그인이 만료됐습니다. `python -m blogbot login` 으로 직접 다시 로그인해 주세요.")
-    try:
-        body = page.locator("body").inner_text(timeout=2000)
-    except Exception:
-        body = ""
-    if re.search(r"이용이\s*제한|게시\s*제한|이용\s*제한\s*안내", body):
+    body = ""
+    for frame in page.frames:  # 에디터가 iframe 안에 있으면 안내도 그 안에 뜰 수 있다
+        try:
+            body += frame.locator("body").inner_text(timeout=1500) + "\n"
+        except Exception:
+            pass
+    if re.search(r"이용이\s*제한|게시\s*제한|이용\s*제한\s*(중|되었|된|안내)", body):
         raise Blocked("계정 또는 게시 이용제한 안내가 보입니다. 네이버 고객센터에서 사유를 확인하세요. 발행을 멈춥니다.")
 
 
@@ -329,13 +333,15 @@ def _open_publish_layer(page, ed: Editor, post: Post, cfg: dict, notes: list[str
     ed.need("publish_button").click()
     ed.find("publish_layer", timeout=5)
 
+    layer = ed.find("publish_layer", timeout=1)
     category = (ncfg.get("category") or "").strip()
     if category:
         btn = ed.find("category_button", timeout=3)
         item = None
         if btn is not None:
             btn.click()
-            item = ed.find("category_item", timeout=3, name=category)
+            # 본문 속 같은 단어를 누르지 않도록 발행 레이어 안에서만 찾는다
+            item = ed.find("category_item", timeout=3, scope=layer, name=category.replace('"', '\\"'))
         if item is not None:
             item.click()
         else:
@@ -409,8 +415,8 @@ def fill_editor(
             phase = "layer_open"
 
             if mode == "publish":
-                if any("확인하지 못했습니다" in n for n in notes):
-                    raise RuntimeError("발행 설정을 확인하지 못해 자동 발행을 멈췄습니다: " + " / ".join(notes))
+                if notes:  # 자동 발행은 모든 단계가 확인됐을 때만
+                    raise RuntimeError("자동 입력 중 확인되지 않은 부분이 있어 자동 발행을 멈췄습니다: " + " / ".join(notes))
                 phase = "confirm_clicked"
                 ed.need("confirm_publish_button").click()
                 url, log_no = _wait_for_post_url(page, 30)
@@ -423,10 +429,12 @@ def fill_editor(
             print("발행 레이어의 [발행] 버튼(또는 예약 발행)을 직접 눌러 주세요.")
             input("다 끝났으면 여기서 Enter 를 누르세요... ")
             url, log_no = _post_url(page)
-            if log_no:
-                return Result("published", url, log_no, notes)
-            ans = input("발행 주소를 확인하지 못했습니다. [p]발행함 / [r]예약함 / [n]발행 안 함: ").strip().lower()
+            # 예약 후 블로그 홈으로 가면 예전 글 주소가 보일 수 있으므로 사람이 확정한다
+            hint = f"(감지된 글 주소: {url}) " if log_no else "(발행된 글 주소를 찾지 못했습니다) "
+            ans = input(hint + "[p]발행함 / [r]예약함 / [n]발행 안 함: ").strip().lower()
             status = {"p": "published", "r": "scheduled", "n": "not_published"}.get(ans, "unknown")
+            if status == "published" and log_no:
+                return Result(status, url, log_no, notes)
             return Result(status, page.url, "", notes)
         except Blocked:
             raise
