@@ -355,6 +355,50 @@ def cmd_run(args, cfg) -> None:
     cmd_publish(args, cfg, draft_dir=d)
 
 
+HALT_HELP = (
+    "  - 네이버 고객센터 > 검색 > '검색 반영 요청'에서 해당 글을 요청할 수 있습니다.\n"
+    "  - 최근 글에 새 경험 정보가 충분했는지, 예전 글·사진과 겹치지 않았는지 점검하세요."
+)
+
+
+def search_url(title: str) -> str:
+    return "https://search.naver.com/search.naver?where=blog&query=" + quote(f'"{title}"')
+
+
+def pending_checks(ledger) -> list[tuple[int, dict]]:
+    """발행 후 24시간이 지났고 아직 검색 확인을 안 한 글 (ledger 안의 위치, 기록)."""
+    now = datetime.now()
+    return [
+        (i, p) for i, p in enumerate(ledger.data["posts"])
+        if p.get("status") in PUBLISHED_STATES and p.get("indexed") is None
+        and now - datetime.fromisoformat(p["at"]) >= timedelta(hours=24)
+    ]
+
+
+def record_checks(ledger, answers: dict[int, bool], cfg) -> str:
+    """검색 확인 결과를 기록하고, 연속 누락이면 발행을 멈춘다. 멈췄으면 그 사유를 돌려준다."""
+    if not answers:
+        return ""
+    now = datetime.now().isoformat(timespec="seconds")
+    for i, indexed in answers.items():
+        ledger.data["posts"][i]["indexed"] = indexed
+        ledger.data["posts"][i]["checked_at"] = now
+    since = ledger.data.get("resumed_at", "")
+    checked = [p for p in ledger.data["posts"] if p.get("indexed") is not None and p.get("checked_at", "") >= since]
+    streak = int(cfg.get("schedule", {}).get("halt_after_missing", 2))
+    reason = ""
+    if len(checked) >= streak and all(p["indexed"] is False for p in checked[-streak:]):
+        reason = ledger.data["halted"] = f"최근 {streak}개 글이 검색에 나오지 않음"
+    ledger.save()
+    return reason
+
+
+def resume_publishing(ledger) -> None:
+    ledger.data["halted"] = ""
+    ledger.data["resumed_at"] = datetime.now().isoformat(timespec="seconds")
+    ledger.save()
+
+
 def cmd_check(args, cfg) -> None:
     """발행 1~2일 뒤 검색 누락 여부를 사람이 확인하고 기록한다.
 
@@ -365,46 +409,30 @@ def cmd_check(args, cfg) -> None:
 
     ledger = Ledger(paths().ledger)
     if args.resume:
-        ledger.data["halted"] = ""
-        ledger.data["resumed_at"] = datetime.now().isoformat(timespec="seconds")
-        ledger.save()
+        resume_publishing(ledger)
         print("발행 중단을 해제했습니다.")
         return
-    now = datetime.now()
-    pending = [
-        p for p in ledger.data["posts"]
-        if p.get("status") in PUBLISHED_STATES and p.get("indexed") is None
-        and now - datetime.fromisoformat(p["at"]) >= timedelta(hours=24)
-    ]
+    pending = pending_checks(ledger)
     if not pending:
         print("확인할 글이 없습니다 (발행 후 24시간이 지난 글만 확인합니다).")
         return
     print("각 주소를 브라우저에서 열어 '블로그' 탭에 내 글이 보이는지 확인하세요.")
     print("(임시저장·예약한 글은 실제로 발행된 뒤에 확인하고, 아직이면 Enter 로 건너뛰세요)\n")
-    answered = False
-    for p in pending:
-        url = "https://search.naver.com/search.naver?where=blog&query=" + quote(f'"{p["title"]}"')
-        print(f"- {p['title']}\n  {url}")
+    answers = {}
+    for i, p in pending:
+        print(f"- {p['title']}\n  {search_url(p['title'])}")
         ans = input("  검색에 나오나요? [y]나옴 / [n]안 나옴 / [Enter]건너뛰기: ").strip().lower()
         if ans in ("y", "n"):
-            p["indexed"] = ans == "y"
-            p["checked_at"] = now.isoformat(timespec="seconds")
-            answered = True
-    if not answered:
-        ledger.save()
-        return
-    since = ledger.data.get("resumed_at", "")
-    checked = [p for p in ledger.data["posts"] if p.get("indexed") is not None and p.get("checked_at", "") >= since]
-    streak = int(cfg.get("schedule", {}).get("halt_after_missing", 2))
-    if len(checked) >= streak and all(p["indexed"] is False for p in checked[-streak:]):
-        ledger.data["halted"] = f"최근 {streak}개 글이 검색에 나오지 않음"
-        print(
-            f"\n⚠ 최근 {streak}개 글이 검색에서 빠졌습니다. 발행을 멈춥니다.\n"
-            "  - 네이버 고객센터 > 검색 > '검색 반영 요청'에서 해당 글을 요청할 수 있습니다.\n"
-            "  - 최근 글에 새 경험 정보가 충분했는지, 예전 글·사진과 겹치지 않았는지 점검하세요.\n"
-            "  - 정리 후 `python -m blogbot check --resume` 으로 해제합니다."
-        )
-    ledger.save()
+            answers[i] = ans == "y"
+    reason = record_checks(ledger, answers, cfg)
+    if reason:
+        print(f"\n⚠ {reason}. 발행을 멈춥니다.\n{HALT_HELP}\n  - 정리 후 `python -m blogbot check --resume` 으로 해제합니다.")
+
+
+def cmd_web(args, cfg) -> None:
+    from blogbot.web.app import serve
+
+    serve(args.config, port=args.port, open_browser=not args.no_browser)
 
 
 def cmd_login(args, cfg) -> None:
@@ -498,6 +526,11 @@ def main(argv: list[str] | None = None) -> None:
 
     s = sub.add_parser("login", help="네이버 로그인 (최초 1회, 직접 로그인)")
     s.set_defaults(func=cmd_login)
+
+    s = sub.add_parser("web", help="직원용 화면 열기 (이 컴퓨터의 브라우저에서)")
+    s.add_argument("--port", type=int, default=8765)
+    s.add_argument("--no-browser", action="store_true", help="브라우저를 자동으로 열지 않음")
+    s.set_defaults(func=cmd_web)
 
     s = sub.add_parser("drafts", help="초안 목록")
     s.set_defaults(func=cmd_drafts)

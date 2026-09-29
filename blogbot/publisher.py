@@ -54,6 +54,21 @@ DEFAULT_SELECTORS = {
 }
 
 
+def _terminal_ask(message: str, choices: dict[str, str] | None = None) -> str:
+    """사람에게 묻기. choices 가 없으면 확인(Enter)만 기다린다."""
+    if not choices:
+        input(message + " (Enter) ")
+        return ""
+    options = " / ".join(f"[{k}]{v}" for k, v in choices.items())
+    return input(f"{message} {options}: ").strip().lower()
+
+
+# 웹 화면에서는 이 함수를 바꿔 끼워 버튼으로 답을 받는다.
+ask = _terminal_ask
+
+DONE_CHOICES = {"p": "발행함", "r": "예약함", "n": "발행 안 함"}
+
+
 class Blocked(SystemExit):
     """계정 보호조치·이용제한·로그인 만료. 자동으로 풀려고 하지 않고 멈춘다."""
 
@@ -96,7 +111,7 @@ def login(cfg: dict, profile_dir: Path) -> None:
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         page.goto(LOGIN_URL)
         print("열린 브라우저에서 네이버에 직접 로그인하세요. '로그인 상태 유지'를 켜 두면 세션이 오래 갑니다.")
-        input("로그인을 마쳤으면 여기서 Enter 를 누르세요... ")
+        ask("열린 브라우저에서 로그인을 마쳤으면 확인을 눌러 주세요.")
         ok = any(c["name"] == "NID_AUT" for c in ctx.cookies())
         ctx.close()
     if not ok:
@@ -182,7 +197,7 @@ def _wait_for_human_if_captcha(page, ed: Editor) -> None:
         except Exception:
             box = None
         if box and box["width"] > 10 and box["height"] > 10:
-            input("추가 확인(캡차)이 떴습니다. 브라우저에서 직접 풀고 Enter 를 누르세요... ")
+            ask("추가 확인(캡차)이 떴습니다. 브라우저에서 직접 풀고 확인을 눌러 주세요.")
             return
 
 
@@ -453,11 +468,11 @@ def fill_editor(
                 print("  ⚠", n)
             print("\n글·사진·태그·발행 설정을 채웠습니다. 브라우저에서 확인·수정한 뒤")
             print("발행 레이어의 [발행] 버튼(또는 예약 발행)을 직접 눌러 주세요.")
-            input("다 끝났으면 여기서 Enter 를 누르세요... ")
+            ask("브라우저에서 확인·수정한 뒤 [발행] 또는 예약 발행을 직접 누르고, 끝나면 확인을 눌러 주세요.")
             url, log_no = _post_url(page)
             # 예약 후 블로그 홈으로 가면 예전 글 주소가 보일 수 있으므로 사람이 확정한다
-            hint = f"(감지된 글 주소: {url}) " if log_no else "(발행된 글 주소를 찾지 못했습니다) "
-            ans = input(hint + "[p]발행함 / [r]예약함 / [n]발행 안 함: ").strip().lower()
+            hint = f"감지된 글 주소: {url}." if log_no else "발행된 글 주소를 찾지 못했습니다."
+            ans = ask(hint + " 어떻게 됐나요?", DONE_CHOICES)
             status = {"p": "published", "r": "scheduled", "n": "not_published"}.get(ans, "unknown")
             if status == "published" and log_no:
                 return Result(status, url, log_no, notes)
@@ -471,7 +486,7 @@ def fill_editor(
                 return Result("unknown", page.url, "", notes)
             print(f"\n오류: {e}")
             if phase in ("filling", "filled", "layer_open"):
-                ans = input("브라우저에서 직접 마무리했나요? [p]발행함 / [r]예약함 / [n]아니요: ").strip().lower()
+                ans = ask(f"자동 입력 중 오류가 났습니다 ({e}). 브라우저에서 직접 마무리했나요?", DONE_CHOICES)
                 status = {"p": "published", "r": "scheduled"}.get(ans)
                 if status:
                     notes.append(f"자동 입력 중 오류 후 직접 마무리: {e}")

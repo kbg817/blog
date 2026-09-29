@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ job.title }}{% endblock %}
+{% block content %}
+<h1>{{ job.title }}</h1>
+<div id="status" class="alert gray">불러오는 중…</div>
+<div id="question" class="card" style="display:none; border:2px solid var(--green)">
+  <p id="qtext" style="font-size:17px; font-weight:600; margin-top:0"></p>
+  <form method="post" action="{{ url_for('job_answer', job_id=job.id) }}" id="qform" class="row"></form>
+</div>
+<div id="next" style="display:none" class="card"></div>
+<details open><summary class="muted">진행 기록</summary><pre class="log" id="log"></pre></details>
+
+<script>
+const draftUrl = "{{ url_for('draft_page', name='__NAME__') }}";
+let lastQuestion = null;
+async function poll() {
+  const r = await fetch("{{ url_for('job_json', job_id=job.id) }}");
+  const j = await r.json();
+  const log = document.getElementById("log");
+  const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
+  log.textContent = j.log.join("\n");
+  if (atBottom) log.scrollTop = log.scrollHeight;
+  const st = document.getElementById("status");
+  const labels = {running: ["⏳ 진행 중입니다. 이 창을 닫지 말고 기다려 주세요.", "amber"],
+                  waiting: ["👋 확인이 필요합니다.", "amber"],
+                  done: ["✅ 끝났습니다.", "green"], error: ["⛔ 멈췄습니다.", "red"]};
+  const [text, color] = labels[j.status];
+  st.className = "alert " + color;
+  st.textContent = text + (j.error ? " " + j.error : "");
+  const q = document.getElementById("question");
+  if (j.question) {
+    const key = JSON.stringify(j.question);
+    if (key !== lastQuestion) {
+      lastQuestion = key;
+      document.getElementById("qtext").textContent = j.question.message;
+      const f = document.getElementById("qform");
+      f.innerHTML = "";
+      for (const [k, v] of Object.entries(j.question.choices)) {
+        const b = document.createElement("button");
+        b.className = "btn" + (k === "n" ? " gray" : "");
+        b.name = "answer"; b.value = k; b.textContent = v;
+        f.appendChild(b);
+      }
+    }
+    q.style.display = "";
+  } else { q.style.display = "none"; lastQuestion = null; }
+  const next = document.getElementById("next");
+  if (j.status === "done" || j.status === "error") {
+    if (j.result && (j.kind === "write" || j.kind === "publish")) {
+      next.innerHTML = '<a class="btn" href="' + draftUrl.replace("__NAME__", encodeURIComponent(j.result)) + '">글 보러 가기</a>';
+    } else {
+      next.innerHTML = '<a class="btn gray" href="{{ url_for('home') }}">홈으로</a>';
+    }
+    next.style.display = "";
+    return;
+  }
+  setTimeout(poll, 1500);
+}
+poll();
+</script>
+{% endblock %}

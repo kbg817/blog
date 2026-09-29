@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}설정{% endblock %}
+{% block content %}
+<h1>설정</h1>
+
+<div class="card">
+  <h2>1. 문체 학습</h2>
+  <p>예전 원고를 <code>{{ manuscripts }}</code> 에, 예전 사진을 <code>{{ photos }}</code> 에 넣은 뒤 누르세요.
+  원고가 많이 늘었을 때 다시 하면 됩니다. {% if has_style %}<b>✅ 학습 완료</b>{% endif %}</p>
+  <form method="post" action="{{ url_for('setup_action', action='learn') }}"><button class="btn">문체 학습하기</button></form>
+</div>
+
+<div class="card">
+  <h2>2. 사진 분석</h2>
+  <p>새 사진을 <code>{{ new_photos }}</code> 에 넣었을 때 누르세요. (새 글 쓰기에서 올린 사진은 자동으로 분석됩니다)
+  현재 분석된 사진: {{ n_photos }}장</p>
+  <form method="post" action="{{ url_for('setup_action', action='photos') }}"><button class="btn gray">사진 분석하기</button></form>
+</div>
+
+<div class="card">
+  <h2>3. 네이버 로그인</h2>
+  <p>크롬 창이 열리면 <b>직접</b> 로그인하세요. '로그인 상태 유지'를 켜 두면 오래 유지됩니다.
+  글 올리기에서 "로그인이 만료됐다"고 나오면 다시 하면 됩니다.</p>
+  <form method="post" action="{{ url_for('setup_action', action='login') }}"><button class="btn gray">네이버 로그인</button></form>
+</div>
+
+{% set nv = c.get('naver') or {} %}{% set sc = c.get('schedule') or {} %}{% set bz = c.get('business') or {} %}
+<div class="card">
+  <h2>현재 설정</h2>
+  <p class="hint">바꾸려면 사장님이 <code>{{ config_path }}</code> 파일을 고치면 됩니다.</p>
+  <table>
+    <tr><th>블로그</th><td>blog.naver.com/{{ nv.blog_id }}</td></tr>
+    <tr><th>업로드 방식</th><td>{{ {'review':'직접 확인 후 발행','draft':'네이버 임시저장까지','publish':'자동 발행'}.get(nv.get('mode','review'), nv.get('mode')) }}</td></tr>
+    <tr><th>카테고리</th><td>{{ nv.category or '(기본 카테고리)' }}</td></tr>
+    <tr><th>발행 한도</th><td>하루 {{ sc.max_posts_per_day|default(1) }}건 · 7일 {{ sc.max_posts_per_week|default(4) }}건 · {{ sc.min_interval_hours|default(20) }}시간 간격</td></tr>
+    <tr><th>블로그 주제</th><td>{{ (bz.topics or [])|join(', ') }}</td></tr>
+  </table>
+</div>
+{% endblock %}

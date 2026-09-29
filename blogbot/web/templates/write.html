@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}새 글 쓰기{% endblock %}
+{% block content %}
+<h1>새 글 쓰기</h1>
+<form method="post" enctype="multipart/form-data" class="card" onsubmit="this.querySelector('button').disabled=true; this.querySelector('button').textContent='시작하는 중…'">
+  <div class="grid2">
+    <div>
+      <label>주제 <span class="hint">예: 가을 신메뉴 소개</span></label>
+      <input type="text" name="topic" value="{{ form.topic or '' }}" required>
+    </div>
+    <div>
+      <label>주 키워드 (1개) <span class="hint">손님이 검색할 말. 예: 밤라떼</span></label>
+      <input type="text" name="keyword" value="{{ form.keyword or '' }}" required>
+    </div>
+  </div>
+  <div class="grid2">
+    <div>
+      <label>보조 키워드 <span class="hint">쉼표로 구분. 예: 강남 카페, 가을 신메뉴</span></label>
+      <input type="text" name="sub_keywords" value="{{ form.sub_keywords or '' }}">
+    </div>
+    <div>
+      <label>글 종류</label>
+      <select name="kind">
+        {% for k, v in kind_labels.items() %}<option value="{{ k }}" {{ 'selected' if form.kind==k }}>{{ v }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <label>이번 글 메모 (가장 중요!)
+    <span class="hint">실제로 있었던 일을 구체적으로. 날짜, 가격, 한 일, 느낀 점, 손님 반응, 아쉬웠던 점 등.
+    여기 없는 내용은 AI 가 지어내지 않으니, 많이 적을수록 좋은 글이 나옵니다.</span></label>
+  <textarea name="notes" rows="7" required placeholder="예) 9/25 밤라떼 출시, 5,500원. 처음엔 너무 달아서 밤 페이스트를 20% 줄임. 따뜻한 게 더 맛있음. 첫날 30잔 나감.">{{ form.notes or '' }}</textarea>
+
+  <label>이번 글 사진 <span class="hint">이번 글을 위해 새로 찍은 사진 (여러 장 선택 가능). 새 사진이 노출에 가장 좋습니다.</span></label>
+  <input type="file" name="photos" multiple accept="image/*">
+
+  <p style="margin-top:20px"><button class="btn" type="submit">글쓰기 시작</button>
+  <span class="hint">&nbsp;1~3분 정도 걸립니다.</span></p>
+</form>
+{% endblock %}

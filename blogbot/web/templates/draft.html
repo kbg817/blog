@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{{ post.title }}{% endblock %}
+{% block content %}
+{% set editable = meta.status in ('draft', 'not_published', None) %}
+<div class="row" style="justify-content:space-between">
+  <h1 style="margin:0">{{ post.title }}</h1>
+  <span class="tag {{ meta.status }}">{{ status_labels.get(meta.status, meta.status) }}</span>
+</div>
+<p class="muted">주 키워드: {{ meta.keyword }} · 공백 제외 {{ meta.chars_no_space }}자 · 사진 {{ meta.images|length }}장
+  {% if meta.url %}· <a href="{{ meta.url }}" target="_blank">올린 글 보기</a>{% endif %}</p>
+
+{% if blocking %}
+<div class="alert red"><b>올리기 전에 고쳐야 할 것</b>
+  <ul class="lints">{% for l in blocking %}<li>{{ l.msg }}</li>{% endfor %}</ul>
+  <span class="hint">아래에서 글을 고치고 [저장하고 다시 검사]를 누르세요.</span></div>
+{% endif %}
+{% if warnings %}
+<div class="alert amber"><b>확인해 보세요</b> <span class="hint">(올릴 수는 있어요)</span>
+  <ul class="lints">{% for l in warnings %}<li>{{ l.msg }}</li>{% endfor %}</ul></div>
+{% endif %}
+
+<form method="post" action="{{ url_for('draft_save', name=name) }}" class="card">
+  <label>제목</label>
+  <input type="text" name="title" value="{{ post.title }}" {{ '' if editable else 'readonly' }}>
+  {% for b in post.blocks %}
+    {% set i = loop.index0 %}
+    <div style="margin-top:14px; padding-top:10px; border-top:1px dashed var(--line)">
+      <div class="row" style="justify-content:space-between">
+        <span class="tag">{{ {'heading':'소제목','text':'문단','image':'사진','quote':'인용구','divider':'구분선'}[b.kind] }}</span>
+        {% if editable %}<label style="margin:0;font-weight:400" class="hint"><input type="checkbox" name="remove_{{ i }}"> 빼기</label>{% endif %}
+      </div>
+      {% if b.kind == 'image' %}
+        {% set img = meta.images.get(b.photo) %}
+        {% if img %}<img src="{{ url_for('draft_image', name=name, filename=img.file) }}" style="max-width:100%;max-height:320px;border-radius:8px;margin-top:8px">
+          {% if img.reused %}<div class="hint">예전에 쓴 사진</div>{% endif %}{% endif %}
+        <input type="text" name="block_{{ i }}" value="{{ b.text }}" placeholder="사진 설명" style="margin-top:6px" {{ '' if editable else 'readonly' }}>
+      {% elif b.kind == 'divider' %}
+        <hr>
+      {% else %}
+        <textarea name="block_{{ i }}" rows="{{ [2, (b.text|length // 45) + b.text.count('\n') + 1]|max }}" {{ '' if editable else 'readonly' }}
+          style="{{ 'font-weight:700;font-size:17px' if b.kind=='heading' }}">{{ b.text }}</textarea>
+      {% endif %}
+    </div>
+  {% endfor %}
+  <label>태그 <span class="hint">쉼표로 구분</span></label>
+  <input type="text" name="tags" value="{{ post.tags|join(', ') }}" {{ '' if editable else 'readonly' }}>
+  {% if editable %}<p style="margin-top:16px"><button class="btn gray" type="submit">저장하고 다시 검사</button></p>{% endif %}
+</form>
+
+{% if editable %}
+<form method="post" action="{{ url_for('draft_publish', name=name) }}" class="card">
+  <h2>네이버 에디터에 올리기</h2>
+  <p>이 컴퓨터에 크롬 창이 열리고 제목·본문·사진·태그가 자동으로 채워집니다.
+  <b>마지막 [발행] 버튼은 직접</b> 누르고, 이 화면으로 돌아와 결과를 알려 주세요.</p>
+  <ul class="hint">
+    <li>저장하지 않은 수정 내용은 올라가지 않습니다. 먼저 [저장하고 다시 검사]를 누르세요.</li>
+    <li>올리는 동안에는 열린 크롬 창을 건드리지 마세요.</li>
+  </ul>
+  <div class="row">
+    <button class="btn" type="submit" {{ 'disabled' if blocking and not (blocking|length == 1 and blocking[0].code == 'overlap') }}>에디터에 올리기</button>
+    {% if blocking|selectattr('code','equalto','overlap')|list %}
+      <label style="margin:0;font-weight:400"><input type="checkbox" name="ignore_overlap"> 예전 글과 겹치는 건 확인했고 그대로 올림</label>
+    {% endif %}
+    <label style="margin:0;font-weight:400" class="hint"><input type="checkbox" name="debug"> 단계별 화면 저장 (문제 있을 때)</label>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}검색 확인{% endblock %}
+{% block content %}
+<h1>검색 확인</h1>
+<p class="muted">올린 지 하루가 지난 글이 네이버 검색에 나오는지 확인합니다. 링크를 눌러 <b>블로그</b> 탭에 우리 글이 보이는지 보고 골라 주세요.
+프로그램이 네이버 검색을 직접 긁지 않기 때문에 사람이 확인해야 합니다.</p>
+
+{% if halted %}
+<div class="alert red">⛔ 발행이 멈춰 있습니다: {{ halted }}<pre style="white-space:pre-wrap;margin:8px 0">{{ help }}</pre>
+  <form method="post" action="{{ url_for('check_resume') }}"><button class="btn gray">점검을 마쳤고, 발행을 다시 허용</button></form></div>
+{% endif %}
+
+{% if items %}
+<form method="post" class="card">
+  <table>
+    <tr><th>글</th><th>검색 결과</th></tr>
+    {% for it in items %}
+    <tr>
+      <td><a href="{{ it.url }}" target="_blank">{{ it.title }} 🔍</a><div class="hint">{{ it.at }} 올림
+        {% if it.post_url %}· <a href="{{ it.post_url }}" target="_blank">글 보기</a>{% endif %}</div></td>
+      <td style="white-space:nowrap">
+        <label style="display:inline;font-weight:400"><input type="radio" name="post_{{ it.i }}" value="y"> 나옴</label>&nbsp;
+        <label style="display:inline;font-weight:400"><input type="radio" name="post_{{ it.i }}" value="n"> 안 나옴</label>&nbsp;
+        <label style="display:inline;font-weight:400" class="hint"><input type="radio" name="post_{{ it.i }}" value="" checked> 나중에</label>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="hint">예약·임시저장한 글은 실제로 발행된 뒤에 확인하세요.</p>
+  <button class="btn">기록하기</button>
+</form>
+{% else %}
+<div class="card muted">지금 확인할 글이 없습니다.</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}블로그 도우미{% endblock %}</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#6b7280; --line:#e3e6eb;
+          --green:#03a94d; --green-d:#028a3f; --red:#d93636; --red-bg:#fdecec; --amber:#b86e00; --amber-bg:#fff5e0; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; background:var(--bg); color:var(--text); font-size:15px; line-height:1.6; }
+  header { background:#fff; border-bottom:1px solid var(--line); }
+  .wrap { max-width:960px; margin:0 auto; padding:0 16px; }
+  nav { display:flex; gap:4px; align-items:center; height:56px; overflow-x:auto; }
+  nav .brand { font-weight:700; margin-right:16px; white-space:nowrap; }
+  nav a { color:var(--text); text-decoration:none; padding:8px 12px; border-radius:8px; white-space:nowrap; }
+  nav a:hover { background:var(--bg); }
+  nav a.on { background:#e8f7ee; color:var(--green-d); font-weight:600; }
+  main { padding:24px 0 64px; }
+  h1 { font-size:22px; margin:0 0 16px; }
+  h2 { font-size:17px; margin:0 0 12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:16px; }
+  .btn { display:inline-block; border:0; border-radius:8px; padding:10px 18px; font-size:15px; cursor:pointer; text-decoration:none; background:var(--green); color:#fff; font-weight:600; }
+  .btn:hover { background:var(--green-d); }
+  .btn.gray { background:#eef0f3; color:var(--text); }
+  .btn.gray:hover { background:#e2e5ea; }
+  .btn[disabled] { background:#c9cdd3; cursor:not-allowed; }
+  label { display:block; font-weight:600; margin:14px 0 6px; }
+  .hint { color:var(--muted); font-size:13px; font-weight:400; }
+  input[type=text], textarea, select { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font:inherit; background:#fff; }
+  textarea { min-height:90px; resize:vertical; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; font-size:13px; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:99px; font-size:12px; background:#eef0f3; white-space:nowrap; }
+  .tag.published, .tag.scheduled { background:#e8f7ee; color:var(--green-d); }
+  .tag.unknown { background:var(--amber-bg); color:var(--amber); }
+  .alert { border-radius:10px; padding:12px 16px; margin-bottom:16px; }
+  .alert.red { background:var(--red-bg); color:var(--red); }
+  .alert.amber { background:var(--amber-bg); color:var(--amber); }
+  .alert.green { background:#e8f7ee; color:var(--green-d); }
+  .alert.gray { background:#eef0f3; }
+  ul.lints { margin:0; padding-left:20px; }
+  .muted { color:var(--muted); }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:640px) { .grid2 { grid-template-columns:1fr; } }
+  pre.log { background:#11151c; color:#d7dde6; padding:14px; border-radius:10px; max-height:420px; overflow:auto; white-space:pre-wrap; font-size:13px; }
+</style>
+</head>
+<body>
+<header><div class="wrap"><nav>
+  <span class="brand">📝 블로그 도우미</span>
+  <a href="{{ url_for('home') }}" class="{{ 'on' if request.endpoint=='home' }}">홈</a>
+  <a href="{{ url_for('write_form') }}" class="{{ 'on' if request.endpoint in ('write_form','write_submit') }}">새 글 쓰기</a>
+  <a href="{{ url_for('check_page') }}" class="{{ 'on' if request.endpoint=='check_page' }}">검색 확인</a>
+  <a href="{{ url_for('setup_page') }}" class="{{ 'on' if request.endpoint=='setup_page' }}">설정</a>
+</nav></div></header>
+<main><div class="wrap">
+  {% for m in get_flashed_messages() %}<div class="alert gray">{{ m }}</div>{% endfor %}
+  {% if active_job and request.endpoint != 'job_page' %}
+    <div class="alert amber">⏳ '{{ active_job.title }}' 진행 중 — <a href="{{ url_for('job_page', job_id=active_job.id) }}">진행 상황 보기</a>
+    {% if active_job.status == 'waiting' %}<b>(확인이 필요합니다)</b>{% endif %}</div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</div></main>
+</body>
+</html>

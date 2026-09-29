@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>홈</h1>
+
+{% if not (setup.config and setup.style and setup.login) %}
+<div class="card">
+  <h2>처음 준비</h2>
+  <ul>
+    <li>{{ '✅' if setup.config else '⬜' }} 사장님이 config.yaml 에 블로그 ID·사업 정보 입력</li>
+    <li>{{ '✅' if setup.style else '⬜' }} 문체 학습 (<a href="{{ url_for('setup_page') }}">설정</a>에서)</li>
+    <li>{{ '✅' if setup.login else '⬜' }} 네이버 로그인 (<a href="{{ url_for('setup_page') }}">설정</a>에서)</li>
+  </ul>
+</div>
+{% endif %}
+
+{% if halted %}
+  <div class="alert red">⛔ 발행이 멈춰 있습니다: {{ halted }}. <a href="{{ url_for('check_page') }}">검색 확인</a>에서 확인하세요.</div>
+{% elif schedule_reason %}
+  <div class="alert amber">🕒 지금은 올릴 수 없어요 — {{ schedule_reason }} 글쓰기는 미리 해 둘 수 있습니다.</div>
+{% else %}
+  <div class="alert green">✅ 오늘 글을 올릴 수 있습니다.</div>
+{% endif %}
+{% if pending %}<div class="alert amber">🔍 검색에 나오는지 확인할 글이 {{ pending }}개 있습니다. <a href="{{ url_for('check_page') }}">확인하기</a></div>{% endif %}
+
+<div class="card">
+  <div class="row" style="justify-content:space-between">
+    <h2 style="margin:0">글 목록</h2>
+    <a class="btn" href="{{ url_for('write_form') }}">+ 새 글 쓰기</a>
+  </div>
+  {% if drafts %}
+  <table style="margin-top:12px">
+    <tr><th>제목</th><th>상태</th><th>검사</th><th>만든 시각</th></tr>
+    {% for d in drafts %}
+    <tr>
+      <td><a href="{{ url_for('draft_page', name=d.name) }}">{{ d.title }}</a></td>
+      <td><span class="tag {{ d.status }}">{{ status_labels.get(d.status, d.status) }}</span></td>
+      <td>{% if d.blocks %}<span style="color:var(--red)">고칠 것 {{ d.blocks }}</span>{% endif %}
+          {% if d.warns %}<span class="muted">확인 {{ d.warns }}</span>{% endif %}
+          {% if not d.blocks and not d.warns %}<span class="muted">-</span>{% endif %}</td>
+      <td class="muted">{{ d.created }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">아직 글이 없습니다.</p>{% endif %}
+</div>
+<p class="muted">업로드 방식: <b>{{ {'review':'직접 확인 후 발행','draft':'네이버 임시저장까지','publish':'자동 발행'}.get(mode, mode) }}</b></p>
+{% endblock %}
