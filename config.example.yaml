@@ -1,55 +1,74 @@
 # config.example.yaml 을 config.yaml 로 복사한 뒤 수정하세요.
+# 프로젝트 폴더는 이 파일이 있는 폴더입니다 (data/, state/, output/ 이 여기 생깁니다).
 
 naver:
   blog_id: "my_blog_id"          # blog.naver.com/<blog_id>
-  # review  : 글·사진·태그를 에디터에 채워두고 멈춤 → 직접 확인 후 [발행] 클릭 (권장)
-  # draft   : 채운 뒤 [임시저장]까지만
-  # publish : [발행]까지 자동 클릭
+  # review  : 글·사진·태그·발행 설정까지 채우고 멈춤 → 직접 확인 후 [발행]/[예약] 클릭 (권장)
+  # draft   : 채운 뒤 네이버 [임시저장]까지 → 임시저장함에서 열어 직접 예약 발행
+  # publish : [발행]까지 자동. 네이버 이용약관이 '자동화된 수단으로 게시물 게재'를 금지하므로
+  #           제재 위험이 가장 큽니다. 쓰려면 아래 allow_auto_publish 도 true 로 바꿔야 합니다.
   mode: review
-  headless: false
-  # SmartEditor 화면 구조가 바뀌면 여기 셀렉터만 고치면 됩니다.
-  selectors:
-    main_frame: "iframe#mainFrame"
-    popup_cancel: "button.se-popup-button-cancel"
-    help_close: "button.se-help-panel-close-button"
-    title: ".se-documentTitle .se-text-paragraph"
-    body: ".se-component.se-text .se-text-paragraph"
-    image_button: "button.se-image-toolbar-button"
-    save_button: "button:has-text('저장')"
-    publish_button: "button:has-text('발행')"
-    tag_input: "input#tag-input"
-    confirm_publish_button: "button[class*='confirm_btn']"
+  allow_auto_publish: false
+  category: ""                    # 발행할 카테고리 이름 (비우면 블로그 기본 카테고리)
+  browser_channel: ""             # "chrome" 이면 설치된 크롬 사용. 비우면 playwright 크로미움
+  # SmartEditor 화면이 바뀌어 자동 입력이 어긋나면 여기서 셀렉터를 덮어씁니다.
+  # 값은 문자열 또는 목록(앞에서부터 시도). 기본값은 blogbot/publisher.py 의 DEFAULT_SELECTORS.
+  selectors: {}
 
 business:
   name: "내 가게/브랜드 이름"
+  # 글쓴이와 사업의 관계: owner(운영자) / employee(직원) / sponsored(협찬·대가 받음) / none
+  relationship: owner
+  # 공정위 추천·보증 심사지침: 경제적 이해관계는 '제목 또는 본문 첫 부분'에 밝혀야 합니다.
+  # 여기에 적으면 코드가 본문 맨 앞에 넣습니다. (예: "제가 운영하는 가게 이야기입니다.")
+  # 협찬 글이면 반드시 적어야 발행됩니다. 문구의 법적 적정성은 직접 판단해 주세요.
+  disclosure: ""
   description: |
     어떤 제품/서비스인지, 누구를 위한 것인지, 강점은 무엇인지 적어주세요.
-    AI가 이 정보 밖의 사실(가격, 효능 등)을 지어내지 않도록 정확하게 적는 게 중요합니다.
+    AI 는 이 정보와 --notes 밖의 사실(가격, 효능 등)을 쓰지 않습니다.
+  topics: ["카페", "디저트"]      # 블로그가 꾸준히 다루는 주제 (한 주제에 집중할수록 유리)
   facts:                          # 글에 써도 되는 확정 정보
     - "영업시간: 평일 10:00~19:00"
-  call_to_action: "문의는 블로그 이웃 추가 후 댓글이나 톡톡으로 남겨주세요."
+  # 이웃추가·공감 요구는 네이버가 어뷰징으로 분류합니다. 네이버 안에서 끝나는 안내만 쓰세요.
+  call_to_action: "궁금한 점은 댓글이나 네이버 톡톡으로 편하게 물어봐 주세요."
 
 writing:
-  model: claude-opus-5-5
+  model: claude-opus-5-5          # 매일 쓰는 글
+  learn_model: claude-opus-5-5    # 문체 학습 (가끔 한 번). claude-fable-5-1 로 바꾸면 더 정교하지만 약 2.5배 비용
+  photo_model: claude-opus-5-5    # 사진 설명
   effort: high                    # low / medium / high / xhigh / max
-  target_length: 1800             # 본문 대략 글자 수
-  images_per_post: 5
-  examples_per_prompt: 3          # 참고용으로 넣을 과거 원고 수
-  # 과거 원고와 문장이 이 비율 이상 겹치면 경고 (유사문서 방지)
+  learn_effort: high
+  revise_effort: medium
+  review_passes: 1                # 검사 결과를 보고 편집자가 한 번 더 다듬는 횟수 (0 이면 끔)
+  learn_max_docs: 60              # 문체 학습에 쓸 최근 원고 수 (통계는 전체 사용)
+  examples_per_prompt: 3          # 참고 원고 수 (주제가 비슷한 1편 + 주제가 다른 최근 글)
+  # 분량(공백 제외). 네이버 공식 기준은 없고 상위 글도 수백~수천 자로 다양합니다. 범위 밖이면 경고만.
+  length_no_space: {min: 900, target: 1800, max: 4000}
+  images_per_post: 6
+  min_images: 3
+  max_photo_candidates: 30
+  # 과거 글 한 편과 이 비율 이상 겹치면 발행을 막습니다 (유사문서 방지)
   max_overlap_ratio: 0.15
+  banned_phrases: []              # 추가로 쓰지 않을 표현
+  legal_watchlist: []             # 추가로 확인할 표시광고 관련 단어
 
 images:
-  width: 900                      # 네이버 본문 폭에 맞춘 가로 크기
-  jpeg_quality: 90
-  crop_range: [0.02, 0.06]        # 가장자리 크롭 비율 범위
-  brightness_range: [0.96, 1.05]
-  contrast_range: [0.97, 1.05]
-  saturation_range: [0.96, 1.06]
-  watermark_text: ""              # 예: "@my_blog_id"  (비우면 생략)
-  watermark_logo: ""              # 예: "data/logo.png" (비우면 생략)
-  # 같은 사진을 너무 자주 쓰지 않도록 재사용 제한
-  reuse_cooldown_days: 30
-  max_uses_per_photo: 3
+  # data/photos 의 사진이 예전에 블로그에 이미 올렸던 사진이면 true.
+  # 네이버 유사문서 판정은 사진도 비교하므로, 이 사진들은 '이미 1번 쓴 사진'으로 계산합니다.
+  archive_already_published: true
+  max_reused_per_post: 1          # 한 글에 넣을 수 있는 예전 사진 수
+  reuse_cooldown_days: 90
+  max_uses_per_photo: 2
+  max_long_side: 2000             # 긴 변 최대 픽셀 (작은 사진은 확대하지 않음)
+  min_width: 800
+  jpeg_quality: 92
+  watermark_text: ""              # 예: "@my_blog_id" (작게, 오른쪽 아래)
+  watermark_logo: ""              # 예: "data/logo.png"
+  watermark_font: ""              # 한글 워터마크용 폰트 파일 경로 (못 찾으면 워터마크 생략)
 
 schedule:
-  max_posts_per_day: 1
+  # 발행량 제한은 명령행 옵션으로 넘길 수 없습니다. 바꾸려면 여기서 직접 바꾸세요.
+  max_posts_per_day: 1            # 최근 24시간 기준
+  max_posts_per_week: 4           # 최근 7일 기준
+  min_interval_hours: 20
+  halt_after_missing: 2           # check 에서 연속으로 검색 누락이면 발행 중단

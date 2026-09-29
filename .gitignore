@@ -8,5 +8,7 @@ output/
 state/
 data/manuscripts/*
 data/photos/*
+data/new_photos/*
 !data/manuscripts/.gitkeep
 !data/photos/.gitkeep
+!data/new_photos/.gitkeep

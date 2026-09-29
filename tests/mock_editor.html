@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>mock SmartEditor</title>
+<style>
+  [contenteditable] { min-height: 1.2em; border: 1px dashed #ccc; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<!-- 실제 SmartEditor ONE 의 구조와 셀렉터를 흉내 낸 테스트용 페이지 -->
+<div class="toolbar">
+  <button class="se-image-toolbar-button" data-name="image">사진</button>
+  <button class="se-text-format-toolbar-button">본문</button>
+  <div id="fmt" class="hidden">
+    <button class="se-toolbar-option-text-format-sectionTitle-button">소제목</button>
+    <button class="se-toolbar-option-text-format-text-button">본문</button>
+  </div>
+  <button data-name="quotation">인용구</button>
+  <button data-name="horizontal-line">구분선</button>
+  <button>예약 발행 0건</button>
+  <button data-click-area="tpb.save">저장</button>
+  <button data-click-area="tpb.publish">발행</button>
+</div>
+<input type="file" id="file" class="hidden">
+
+<div class="se-popup"><button class="se-popup-button-cancel">취소</button> 작성 중인 글이 있습니다</div>
+
+<div class="se-documentTitle"><p class="se-text-paragraph" contenteditable="true"></p></div>
+<div id="content">
+  <div class="se-component se-text"><p class="se-text-paragraph" contenteditable="true"></p></div>
+</div>
+
+<div class="layer_publish hidden" id="layer">
+  <button data-click-area="tpb*i.category">카테고리</button>
+  <div id="cats" class="hidden"><label>일상</label><label>카페 이야기</label></div>
+  <input id="tag-input" placeholder="태그 입력">
+  <input type="radio" name="open" id="open_public">
+  <input type="checkbox" id="publish-option-search">
+  <button data-testid="seOnePublishBtn">발행</button>
+</div>
+
+<script>
+  const $ = (s) => document.querySelector(s);
+  let format = "text";
+  const tags = [];
+  let category = "";
+  const log = [];
+
+  document.querySelector(".se-popup-button-cancel").onclick = (e) => e.target.parentElement.remove();
+
+  function currentParagraph() {
+    const sel = window.getSelection();
+    let n = sel.anchorNode;
+    while (n && !(n.classList && n.classList.contains("se-text-paragraph"))) n = n.parentNode;
+    return n;
+  }
+  function newTextComponent(after) {
+    const c = document.createElement("div");
+    c.className = "se-component se-text";
+    c.innerHTML = '<p class="se-text-paragraph" contenteditable="true"></p>';
+    after ? after.after(c) : $("#content").appendChild(c);
+    return c;
+  }
+  // Enter: 현재 문단을 기록하고 새 문단으로
+  document.addEventListener("keydown", (e) => {
+    const p = currentParagraph();
+    if (e.key === "Enter" && p && !p.closest(".se-documentTitle")) {
+      e.preventDefault();
+      const comp = p.closest(".se-component");
+      const c = newTextComponent(comp);
+      if (format === "sectionTitle") { comp.dataset.format = "sectionTitle"; }
+      const np = c.querySelector("p");
+      np.focus();
+    }
+  });
+  $(".se-text-format-toolbar-button").onclick = () => $("#fmt").classList.toggle("hidden");
+  $(".se-toolbar-option-text-format-sectionTitle-button").onclick = () => { format = "sectionTitle"; $("#fmt").classList.add("hidden"); };
+  $(".se-toolbar-option-text-format-text-button").onclick = () => { format = "text"; $("#fmt").classList.add("hidden"); };
+
+  // 사진: 파일 선택 → blob: 으로 먼저 붙고 잠시 뒤 실제 주소로 바뀜 → 아래에 빈 문단 생성
+  $("[data-name=image]").onclick = () => $("#file").click();
+  $("#file").onchange = () => {
+    const comps = document.querySelectorAll("#content .se-component");
+    const last = comps[comps.length - 1];
+    const img = document.createElement("div");
+    img.className = "se-component se-image";
+    img.innerHTML = '<img src="blob:mock-' + Math.random() + '">';
+    last.after(img);
+    img.dataset.file = $("#file").files[0].name;
+    setTimeout(() => { img.querySelector("img").src = "https://postfiles.pstatic.net/mock.jpg"; }, 700);
+    const c = newTextComponent(img);
+    $("#file").value = "";
+  };
+
+  $("[data-click-area='tpb.publish']").onclick = () => $("#layer").classList.remove("hidden");
+  $("[data-click-area='tpb*i.category']").onclick = () => $("#cats").classList.remove("hidden");
+  document.querySelectorAll("#cats label").forEach((l) => (l.onclick = () => { category = l.textContent; }));
+  $("#tag-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { tags.push(e.target.value); e.target.value = ""; }
+  });
+
+  function snapshot() {
+    return {
+      title: $(".se-documentTitle p").textContent,
+      components: [...document.querySelectorAll("#content .se-component")].map((c) =>
+        c.classList.contains("se-image")
+          ? { kind: "image", file: c.dataset.file, src: c.querySelector("img").src }
+          : { kind: c.dataset.format === "sectionTitle" ? "heading" : "text", text: c.textContent }
+      ),
+      tags, category,
+      public: $("#open_public").checked,
+      search: $("#publish-option-search").checked,
+    };
+  }
+  async function record(action) {
+    await fetch("/__record", { method: "POST", body: JSON.stringify({ action, ...snapshot() }) });
+  }
+  $("[data-click-area='tpb.save']").onclick = () => record("save");
+  $("[data-testid=seOnePublishBtn]").onclick = async () => {
+    await record("publish");
+    location.href = "https://blog.naver.com/tester/224000000001";
+  };
+</script>
+</body>
+</html>
