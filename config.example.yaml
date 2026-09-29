@@ -1,0 +1,55 @@
+# config.example.yaml 을 config.yaml 로 복사한 뒤 수정하세요.
+
+naver:
+  blog_id: "my_blog_id"          # blog.naver.com/<blog_id>
+  # review  : 글·사진·태그를 에디터에 채워두고 멈춤 → 직접 확인 후 [발행] 클릭 (권장)
+  # draft   : 채운 뒤 [임시저장]까지만
+  # publish : [발행]까지 자동 클릭
+  mode: review
+  headless: false
+  # SmartEditor 화면 구조가 바뀌면 여기 셀렉터만 고치면 됩니다.
+  selectors:
+    main_frame: "iframe#mainFrame"
+    popup_cancel: "button.se-popup-button-cancel"
+    help_close: "button.se-help-panel-close-button"
+    title: ".se-documentTitle .se-text-paragraph"
+    body: ".se-component.se-text .se-text-paragraph"
+    image_button: "button.se-image-toolbar-button"
+    save_button: "button:has-text('저장')"
+    publish_button: "button:has-text('발행')"
+    tag_input: "input#tag-input"
+    confirm_publish_button: "button[class*='confirm_btn']"
+
+business:
+  name: "내 가게/브랜드 이름"
+  description: |
+    어떤 제품/서비스인지, 누구를 위한 것인지, 강점은 무엇인지 적어주세요.
+    AI가 이 정보 밖의 사실(가격, 효능 등)을 지어내지 않도록 정확하게 적는 게 중요합니다.
+  facts:                          # 글에 써도 되는 확정 정보
+    - "영업시간: 평일 10:00~19:00"
+  call_to_action: "문의는 블로그 이웃 추가 후 댓글이나 톡톡으로 남겨주세요."
+
+writing:
+  model: claude-opus-5-5
+  effort: high                    # low / medium / high / xhigh / max
+  target_length: 1800             # 본문 대략 글자 수
+  images_per_post: 5
+  examples_per_prompt: 3          # 참고용으로 넣을 과거 원고 수
+  # 과거 원고와 문장이 이 비율 이상 겹치면 경고 (유사문서 방지)
+  max_overlap_ratio: 0.15
+
+images:
+  width: 900                      # 네이버 본문 폭에 맞춘 가로 크기
+  jpeg_quality: 90
+  crop_range: [0.02, 0.06]        # 가장자리 크롭 비율 범위
+  brightness_range: [0.96, 1.05]
+  contrast_range: [0.97, 1.05]
+  saturation_range: [0.96, 1.06]
+  watermark_text: ""              # 예: "@my_blog_id"  (비우면 생략)
+  watermark_logo: ""              # 예: "data/logo.png" (비우면 생략)
+  # 같은 사진을 너무 자주 쓰지 않도록 재사용 제한
+  reuse_cooldown_days: 30
+  max_uses_per_photo: 3
+
+schedule:
+  max_posts_per_day: 1

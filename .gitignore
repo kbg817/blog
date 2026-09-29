@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+config.yaml
+.auth/
+output/
+state/
+data/manuscripts/*
+data/photos/*
+!data/manuscripts/.gitkeep
+!data/photos/.gitkeep
