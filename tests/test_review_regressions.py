@@ -101,3 +101,11 @@ def test_check_resume_does_not_rehalt_on_old_answers(project, cfg, monkeypatch):
     monkeypatch.setattr("builtins.input", lambda *_: "n")    # 새 글 1개만 누락 → 아직 중단 아님
     cli.cmd_check(Namespace(resume=False), cfg)
     assert not Ledger(project / "state/ledger.json").data["halted"]
+
+
+def test_markdown_and_emoji_bullets_are_stripped():
+    from blogbot.writer import clean_post
+
+    post = _post([Block(kind="text", text="- 첫째 항목\n• 둘째\n✅ 셋째\n**굵게** 문장", photo="")])
+    post = clean_post(post, "밤라떼", {}, set(), 1)
+    assert post.blocks[0].text == "첫째 항목\n둘째\n셋째\n굵게 문장"

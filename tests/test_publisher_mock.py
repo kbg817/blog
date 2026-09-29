@@ -40,6 +40,8 @@ def harness(monkeypatch, tmp_path):
                     body="<script>location.replace('https://nid.naver.com/nidlogin.login')</script>",
                 )
             body = IFRAME_HTML if state["variant"] == "iframe" else MOCK_HTML
+            if state["variant"] == "strict":
+                body = body.replace("<body>", "<body><script>window.STRICT = true</script>", 1)
             return route.fulfill(status=200, content_type="text/html; charset=utf-8", body=body)
         if "PostWriteForm.naver" in url:
             return route.fulfill(status=200, content_type="text/html; charset=utf-8", body=MOCK_HTML)
@@ -125,3 +127,13 @@ def test_expired_session_stops_without_retry(harness):
     with pytest.raises(publisher.Blocked, match="로그인이 만료"):
         publisher.fill_editor(POST, harness["draft"], IMAGES, _cfg("publish"), harness["profile"])
     assert harness["records"] == []
+
+
+def test_falls_back_to_per_key_typing_when_editor_drops_bulk_input(harness):
+    harness["variant"] = "strict"
+    res = publisher.fill_editor(POST, harness["draft"], IMAGES, _cfg("draft"), harness["profile"])
+    assert res.status == "saved_to_naver_draft"
+    assert any("한 글자씩" in n for n in res.notes)
+    rec = harness["records"][-1]
+    assert rec["title"] == "밤라떼 출시 후기"
+    assert "고소하고 은근히 달아요." in [c.get("text") for c in rec["components"]]

@@ -11,6 +11,9 @@ naver:
   allow_auto_publish: false
   category: ""                    # 발행할 카테고리 이름 (비우면 블로그 기본 카테고리)
   browser_channel: ""             # "chrome" 이면 설치된 크롬 사용. 비우면 playwright 크로미움
+  # insert: 문단을 한 번에 입력 / type: 한 글자씩 입력 (에디터가 빠른 입력을 놓치면 자동으로 type 으로 바뀜)
+  input_method: insert
+  type_delay_ms: 15
   # SmartEditor 화면이 바뀌어 자동 입력이 어긋나면 여기서 셀렉터를 덮어씁니다.
   # 값은 문자열 또는 목록(앞에서부터 시도). 기본값은 blogbot/publisher.py 의 DEFAULT_SELECTORS.
   selectors: {}
@@ -43,7 +46,8 @@ writing:
   learn_max_docs: 60              # 문체 학습에 쓸 최근 원고 수 (통계는 전체 사용)
   examples_per_prompt: 3          # 참고 원고 수 (주제가 비슷한 1편 + 주제가 다른 최근 글)
   # 분량(공백 제외). 네이버 공식 기준은 없고 상위 글도 수백~수천 자로 다양합니다. 범위 밖이면 경고만.
-  length_no_space: {min: 900, target: 1800, max: 4000}
+  # 가장 좋은 기준은 내 키워드로 검색했을 때 상위 글 5~7개의 분량·사진 수를 직접 보고 맞추는 것입니다.
+  length_no_space: {min: 800, target: 1500, max: 4000}
   images_per_post: 6
   min_images: 3
   max_photo_candidates: 30

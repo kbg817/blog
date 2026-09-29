@@ -50,7 +50,7 @@ class Claim(BaseModel):
 class Post(BaseModel):
     search_intent: str = Field(description="이 키워드로 검색한 사람이 알고 싶은 것 1~2문장 (쓰기 전에 먼저 정리)")
     new_info: list[str] = Field(description="이 글에만 있는 새 정보·경험. 반드시 <notes> 에서 가져온 것만")
-    title: str
+    title: str = Field(description="글 내용을 정확히 대표하는 제목. 주 키워드를 자연스럽게 포함, 낚시성 표현 없이")
     blocks: list[Block]
     tags: list[str] = Field(description="태그 5~10개, # 없이. 첫 번째는 주 키워드, 나머지는 본문에 실제로 나온 연관어")
     claims: list[Claim] = Field(description="본문의 구체적 정보·경험을 빠짐없이 나열하고 출처를 표시")
@@ -87,7 +87,7 @@ ENGAGEMENT_BAIT = re.compile(
 NEEDS_CHECK = re.compile(r"[\[\(【]\s*확인\s*필요[^\]\)】]*[\]\)】]")
 URL_RE = re.compile(r"https?://\S+|www\.\S+")
 NUM_RE = re.compile(r"\d[\d,.]*\s*(?:원|만원|천원|%|분|시간|일|개월|년|개|명|km|m|g|kg|ml|L|평|회|잔|인분)")
-MARKDOWN_RE = re.compile(r"\*\*|__|^\s*#{1,6}\s+|^\s*>\s+", re.M)
+MARKDOWN_RE = re.compile(r"\*\*|__|^\s*#{1,6}\s+|^\s*>\s+|^\s*[-*•]\s+|^\s*(?:✅|✔️|✔|👉|▶|►|☑️|🔹|🔸)\s*", re.M)
 
 KIND_GUIDE = {
     "experience": "경험 글: 내가 직접 겪은 일을 시간 흐름대로. 감각 묘사와 판단은 <notes> 에 있는 것만.",
@@ -142,7 +142,8 @@ RULES = """목표: 이 사람이 오늘 새로 겪은 일을 직접 쓴 것처�
 - 블로그 전체에 URL 을 쓰지 않습니다. 이웃추가·공감·댓글을 요구하거나 대가를 약속하는 문장을 쓰지 않습니다.
 - 마무리 안내는 글 끝에 한 번, 매번 조금씩 다른 말로. 가게 이름을 여러 번 반복하지 않습니다.
 - 마크다운 기호, 번호 매긴 나열, 이모지 불릿, 요약·정리 문단, "~에 대해 알아보겠습니다", "결론적으로", "~하는 것이 중요합니다" 같은 AI 티 나는 표현을 쓰지 않습니다. 문단 길이는 원고처럼 들쭉날쭉해도 됩니다.
-- 인용구(quote)와 구분선(divider)은 프로필의 layout 에 그런 습관이 있을 때만, 한 글에 두 번 이하로 씁니다.
+- 인용구(quote)와 구분선(divider)은 프로필의 layout 에 그런 습관이 있을 때만, 그 습관만큼 씁니다. 매 글 같은 서식 패턴을 반복하지 않습니다.
+- 글쓴이는 이 사업의 운영자/직원입니다 (<business> 의 관계 참고). 손님이나 제3자의 후기처럼 쓰지 않고, 운영하는 사람의 시점이 드러나게 씁니다.
 
 <avoid>
 {avoid}
@@ -247,7 +248,7 @@ def write_post(
 - 주 키워드: {keyword}
 - 보조 키워드: {', '.join(sub_keywords) or '(없음)'}
 - 글 종류: {KIND_GUIDE.get(kind, KIND_GUIDE['experience'])}
-- 분량: 공백 제외 약 {length.get('target', 1800)}자. 채우려고 늘리지 말고, 할 말이 적으면 짧게.
+- 분량: 공백 제외 약 {length.get("target", 1500)}자. 채우려고 늘리지 말고, 할 말이 적으면 짧게.
 - 사진: {wcfg.get('images_per_post', 5)}장 이하"""
 
     post = llm.parse(

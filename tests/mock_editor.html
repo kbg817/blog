@@ -41,6 +41,10 @@
 
 <script>
   const $ = (s) => document.querySelector(s);
+  // STRICT: 여러 글자를 한 번에 넣는 입력을 무시하는 에디터 흉내 (한 글자씩은 받음)
+  document.addEventListener("beforeinput", (e) => {
+    if (window.STRICT && e.inputType === "insertText" && (e.data || "").length > 1) e.preventDefault();
+  }, true);
   let format = "text";
   const tags = [];
   let category = "";

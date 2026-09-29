@@ -218,11 +218,23 @@ def _focus_after_last(page, ed: Editor) -> None:
     page.keyboard.press("End")
 
 
+# 입력 방식: "insert"(한 번에 넣기) 또는 "type"(한 글자씩, 짧은 지연).
+# 지연은 사람 흉내가 아니라 SmartEditor 가 입력을 실제로 받아들이게 하기 위한 것.
+_INPUT = {"mode": "insert", "delay": 15}
+
+
+def _write(page, text: str) -> None:
+    if _INPUT["mode"] == "type":
+        page.keyboard.type(text, delay=_INPUT["delay"])
+    else:
+        page.keyboard.insert_text(text)
+
+
 def _type_lines(page, text: str) -> None:
     lines = text.split("\n")
     for i, line in enumerate(lines):
         if line:
-            page.keyboard.insert_text(line)
+            _write(page, line)
         if i < len(lines) - 1:
             page.keyboard.press("Enter")
 
@@ -265,8 +277,20 @@ def _fill(page, ed: Editor, post: Post, draft_dir: Path, images: dict, notes: li
         if loc is not None:
             loc.click()
 
-    ed.need("title").click()
-    page.keyboard.insert_text(post.title)
+    title = ed.need("title")
+    title.click()
+    _write(page, post.title)
+    page.wait_for_timeout(300)
+    # 에디터가 한 번에 넣은 글자를 받아들이지 않으면 한 글자씩 입력 방식으로 바꾼다
+    if _INPUT["mode"] == "insert" and title.inner_text().strip() != post.title.strip():
+        title.click()
+        page.keyboard.press("ControlOrMeta+A")
+        page.keyboard.press("Backspace")
+        _INPUT["mode"] = "type"
+        _write(page, post.title)
+        notes.append("에디터가 빠른 입력을 받지 않아 한 글자씩 입력했습니다.")
+        if title.inner_text().strip() != post.title.strip():
+            raise RuntimeError("제목 입력이 에디터에 반영되지 않았습니다. naver.selectors.title 을 확인해 주세요.")
     ed.need("body").click()
 
     heading_warned = False
@@ -374,7 +398,7 @@ def _post_url(page) -> tuple[str, str]:
     """발행된 글 주소 (에디터가 iframe 안에 있으면 iframe 이 이동할 수 있어 모든 프레임을 본다)."""
     for url in [page.url] + [f.url for f in page.frames]:
         m = POST_URL_RE.search(url)
-        if m and "postwrite" not in url and "PostWriteForm" not in url:
+        if m and not re.search(r"postwrite|PostWriteForm|GoBlogWrite|Redirect=Write", url, re.I):
             return url, m.group(1) or m.group(2)
     return "", ""
 
@@ -396,6 +420,8 @@ def fill_editor(
     mode = ncfg.get("mode", "review")
     notes: list[str] = []
     phase = "start"
+    _INPUT["mode"] = ncfg.get("input_method", "insert")
+    _INPUT["delay"] = int(ncfg.get("type_delay_ms", 15))
     with _playwright()() as p:
         ctx = _launch(p, cfg, profile_dir)
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
